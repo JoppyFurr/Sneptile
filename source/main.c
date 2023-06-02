@@ -12,6 +12,64 @@
  *  - Detect and remove duplicate tiles
  */
 
+typedef struct pixel_s {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+    uint8_t a;
+} pixel_t;
+
+
+/*
+ * Process a single 8x8 tile.
+ */
+void process_tile (pixel_t *buffer, uint32_t stride)
+{
+    printf ("Pattern:\n");
+
+    for (uint32_t y = 0; y < 8; y++)
+    {
+        for (uint32_t x = 0; x < 8; x++)
+        {
+            if (buffer [x + (y * stride)].a == 0)
+            {
+                printf (" ");
+            }
+            else
+            {
+                printf ("#");
+            }
+        }
+        printf ("\n");
+    }
+    printf ("\n");
+}
+
+
+/*
+ * Process an image made up of 8x8 tiles.
+ */
+int process_image (pixel_t *buffer, uint32_t width, uint32_t height)
+{
+    /* Sanity check */
+    if ((width % 8 != 0) || (height % 8 != 0))
+    {
+        fprintf (stderr, "Error: Invalid resoulution %ux%u\n", width, height);
+        return -1;
+    }
+
+    for (uint32_t row = 0; row < height; row += 8)
+    {
+        for (uint32_t col = 0; col < width; col += 8)
+        {
+            process_tile (&buffer [row * width + col], width);
+        }
+    }
+
+    return 0;
+}
+
+
 int main (int argc, char **argv)
 {
     int rc = EXIT_SUCCESS;
@@ -21,7 +79,6 @@ int main (int argc, char **argv)
         fprintf (stderr, "Usage: %s <tiles.png>\n", argv [0]);
         return EXIT_FAILURE;
     }
-
 
     for (uint32_t i = 1; i < argc; i++)
     {
@@ -69,7 +126,7 @@ int main (int argc, char **argv)
             break;
         }
 
-        if ( spng_decoded_image_size (spng_context, SPNG_FMT_RGBA8, &image_size) != 0)
+        if (spng_decoded_image_size (spng_context, SPNG_FMT_RGBA8, &image_size) != 0)
         {
             fprintf (stderr, "Error: Failed to determine decompression size for %s.\n", argv [i]);
             rc = EXIT_FAILURE;
@@ -86,20 +143,22 @@ int main (int argc, char **argv)
         }
 
         /* Decode the image */
-        if (spng_decode_image (spng_context, image_buffer, image_size, SPNG_FMT_RGBA8, 0) != 0)
+        if (spng_decode_image (spng_context, image_buffer, image_size, SPNG_FMT_RGBA8, SPNG_DECODE_TRNS) != 0)
         {
             fprintf (stderr, "Error: Failed to decode image %s.\n", argv [i]);
             rc = EXIT_FAILURE;
             break;
         }
 
-        /* DO SOMETHING */
+        /* Process the image */
         struct spng_ihdr header = {};
         spng_get_ihdr(spng_context, &header);
-        printf ("Image width: %d.\n", header.width);
-        printf ("Image height: %d.\n", header.height);
-        printf ("Image bit_depth: %d.\n", header.bit_depth);
-        printf ("Image color_type: %d.\n", header.color_type);
+        if (process_image ((pixel_t *) image_buffer, header.width, header.height) != 0)
+        {
+            fprintf (stderr, "Error: Failed to process image %s.\n", argv [i]);
+            rc = EXIT_FAILURE;
+            break;
+        }
 
         /* Tidy up */
         free (png_buffer);
