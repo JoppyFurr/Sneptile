@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <spng.h>
 
@@ -57,7 +58,7 @@ static void process_tile (pixel_t *buffer, uint32_t stride)
             uint8_t index = 0;
             pixel_t p = buffer [x + y * stride];
 
-            /* If the pixel is non-transparrent, calculate its colour index */
+            /* If the pixel is non-transparent, calculate its colour index */
             if (p.a != 0)
             {
                 uint8_t colour = ((p.r & 0xc0) >> 6)
@@ -105,11 +106,29 @@ int main (int argc, char **argv)
 
     if (argc < 2)
     {
-        fprintf (stderr, "Usage: %s <tiles.png>\n", argv [0]);
+        fprintf (stderr, "Usage: %s [--palette 0x00 0x01..] <tiles.png>\n", argv [0]);
         return EXIT_FAILURE;
     }
+    argv++;
+    argc--;
 
-    for (uint32_t i = 1; i < argc; i++)
+    /* Accept a user-initialized palette */
+    if (strcmp (argv [0], "--palette") == 0)
+    {
+        while (++argv, --argc)
+        {
+            if (strncmp (argv [0], "0x", 2) == 0 && strlen (argv[0]) == 4)
+            {
+                palette [palette_size++] = strtol (argv [0], NULL, 16);
+            }
+            else
+            {
+                break;
+            }
+        }
+    }
+
+    for (uint32_t i = 0; i < argc; i++)
     {
         spng_ctx *spng_context = spng_ctx_new (0);
 
