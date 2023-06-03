@@ -6,10 +6,12 @@
 #include <spng.h>
 
 /* TODO:
- *  - Take in a palette as a command line option.
- *  - Output an updated palette as a new .h file
+ *  - Output an updated palette as source
+ *  - Output patterns as source
+ *  - Output defines for pattern indexes based on file name
  *  - Option for tall-sprite-mode tile ordering
  *  - Detect and remove duplicate tiles
+ *  - Some way to specify index for colour cycling
  */
 
 typedef struct pixel_s {
@@ -49,10 +51,11 @@ static uint8_t colour_to_index (uint8_t colour)
  */
 static void process_tile (pixel_t *buffer, uint32_t stride)
 {
-    printf ("Pattern:\n");
-
+    printf ("    ");
     for (uint32_t y = 0; y < 8; y++)
     {
+        uint8_t line_data[4] = {};
+
         for (uint32_t x = 0; x < 8; x++)
         {
             uint8_t index = 0;
@@ -68,19 +71,29 @@ static void process_tile (pixel_t *buffer, uint32_t stride)
                 index = colour_to_index (colour);;
             }
 
-            printf ("%02x ", index);
+            /* Convert index to bitplane representation */
+            for (uint32_t i = 0; i < 4; i++)
+            {
+                if (index & (1 << i))
+                {
+                    line_data [i] |= (1 << (7 - x));
+                }
+            }
         }
-        printf ("\n");
+
+        printf ("0x%02x%02x%02x%02x%s",
+                line_data [3], line_data [2], line_data [1], line_data [0],
+                (y < 7) ? ", " : ",\n");
     }
-    printf ("\n");
 }
 
 
 /*
  * Process an image made up of 8x8 tiles.
  */
-static int process_image (pixel_t *buffer, uint32_t width, uint32_t height)
+static int process_image (pixel_t *buffer, uint32_t width, uint32_t height, char *name)
 {
+    printf ("\n    /* %s */\n", name);
     /* Sanity check */
     if ((width % 8 != 0) || (height % 8 != 0))
     {
@@ -127,6 +140,8 @@ int main (int argc, char **argv)
             }
         }
     }
+
+    printf ("const uint32_t patterns [16] = {\n");
 
     for (uint32_t i = 0; i < argc; i++)
     {
@@ -201,7 +216,7 @@ int main (int argc, char **argv)
         /* Process the image */
         struct spng_ihdr header = {};
         spng_get_ihdr(spng_context, &header);
-        if (process_image ((pixel_t *) image_buffer, header.width, header.height) != 0)
+        if (process_image ((pixel_t *) image_buffer, header.width, header.height, argv [i]) != 0)
         {
             fprintf (stderr, "Error: Failed to process image %s.\n", argv [i]);
             rc = EXIT_FAILURE;
@@ -213,6 +228,7 @@ int main (int argc, char **argv)
         free (image_buffer);
         spng_ctx_free (spng_context);
     }
+    printf ("};\n\n");
 
     if (palette_size > 16)
     {
@@ -221,7 +237,7 @@ int main (int argc, char **argv)
     }
     else
     {
-        printf ("uint8_t palette [16] = { ");
+        printf ("const uint8_t palette [16] = { ");
 
         for (uint32_t i = 0; i < palette_size; i++)
         {
