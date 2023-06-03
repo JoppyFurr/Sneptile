@@ -5,7 +5,6 @@
 #include <spng.h>
 
 /* TODO:
- *  - Take in multiple files
  *  - Take in a palette as a command line option.
  *  - Output an updated palette as a new .h file
  *  - Option for tall-sprite-mode tile ordering
@@ -19,11 +18,35 @@ typedef struct pixel_s {
     uint8_t a;
 } pixel_t;
 
+static uint8_t palette [16] = {};
+static uint32_t palette_size = 0;
+
+/*
+ * Convert from colour to palette index.
+ * New colours are added to the palette as needed.
+ */
+static uint8_t colour_to_index (uint8_t colour)
+{
+    /* First, check if the colour is already in the palette */
+    for (uint32_t i = 0; i < palette_size; i++)
+    {
+        if (palette [i] == colour)
+        {
+            return i;
+        }
+    }
+
+    /* If not, add it */
+    palette [palette_size] = colour;
+
+    return palette_size++;
+}
+
 
 /*
  * Process a single 8x8 tile.
  */
-void process_tile (pixel_t *buffer, uint32_t stride)
+static void process_tile (pixel_t *buffer, uint32_t stride)
 {
     printf ("Pattern:\n");
 
@@ -31,14 +54,20 @@ void process_tile (pixel_t *buffer, uint32_t stride)
     {
         for (uint32_t x = 0; x < 8; x++)
         {
-            if (buffer [x + (y * stride)].a == 0)
+            uint8_t index = 0;
+            pixel_t p = buffer [x + y * stride];
+
+            /* If the pixel is non-transparrent, calculate its colour index */
+            if (p.a != 0)
             {
-                printf (" ");
+                uint8_t colour = ((p.r & 0xc0) >> 6)
+                               | ((p.g & 0xc0) >> 4)
+                               | ((p.b & 0xc0) >> 2);
+
+                index = colour_to_index (colour);;
             }
-            else
-            {
-                printf ("#");
-            }
+
+            printf ("%02x ", index);
         }
         printf ("\n");
     }
@@ -49,7 +78,7 @@ void process_tile (pixel_t *buffer, uint32_t stride)
 /*
  * Process an image made up of 8x8 tiles.
  */
-int process_image (pixel_t *buffer, uint32_t width, uint32_t height)
+static int process_image (pixel_t *buffer, uint32_t width, uint32_t height)
 {
     /* Sanity check */
     if ((width % 8 != 0) || (height % 8 != 0))
@@ -164,6 +193,21 @@ int main (int argc, char **argv)
         free (png_buffer);
         free (image_buffer);
         spng_ctx_free (spng_context);
+    }
+
+    if (palette_size > 16)
+    {
+        fprintf (stderr, "Error: Exceeded palette limit with %d colours.\n", palette_size);
+        rc = EXIT_FAILURE;
+    }
+    else
+    {
+        printf ("uint8_t palette [16] = { ");
+
+        for (uint32_t i = 0; i < palette_size; i++)
+        {
+            printf ("0x%02x%s", palette [i], ((i + 1) < palette_size) ? ", " : " };\n");
+        }
     }
 
     return rc;
