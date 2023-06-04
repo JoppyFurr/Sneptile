@@ -13,6 +13,7 @@
  *  - Option for tall-sprite-mode tile ordering
  *  - Detect and remove duplicate tiles
  *  - Some way to specify index for colour cycling
+ *  - A sprite-mode to not colour-match against index 0
  */
 
 typedef struct pixel_s {
@@ -25,6 +26,71 @@ typedef struct pixel_s {
 static uint32_t pattern_index = 0;
 static uint8_t palette [16] = {};
 static uint32_t palette_size = 0;
+
+FILE *palette_file = NULL;
+FILE *pattern_file = NULL;
+FILE *pattern_index_file = NULL;
+
+
+/*
+ * Open the three output files.
+ */
+static int open_files (void)
+{
+    /* TODO: User-specidied output directory */
+
+    pattern_file = fopen ("pattern.h", "w");
+    if (pattern_file == NULL)
+    {
+        /* TODO */
+        fprintf (stderr, "Unable to open ...");
+        return -1;
+    }
+
+    pattern_index_file = fopen ("pattern_index.h", "w");
+    if (pattern_index_file == NULL)
+    {
+        /* TODO */
+        fprintf (stderr, "Unable to open ...");
+        return -1;
+    }
+
+    palette_file = fopen ("palette.h", "w");
+    if (palette_file == NULL)
+    {
+        /* TODO */
+        fprintf (stderr, "Unable to open ...");
+        return -1;
+    }
+
+    return 0;
+}
+
+
+/*
+ * Close the three output files.
+ */
+static void close_files (void)
+{
+    if (pattern_file != NULL)
+    {
+        fclose (pattern_file);
+        pattern_file = NULL;
+    }
+
+    if (pattern_index_file != NULL)
+    {
+        fclose (pattern_index_file);
+        pattern_index_file = NULL;
+    }
+
+    if (palette_file != NULL)
+    {
+        fclose (palette_file);
+        palette_file = NULL;
+    }
+}
+
 
 /*
  * Convert from colour to palette index.
@@ -53,7 +119,7 @@ static uint8_t colour_to_index (uint8_t colour)
  */
 static void process_tile (pixel_t *buffer, uint32_t stride)
 {
-    printf ("    ");
+    fprintf (pattern_file, "    ");
     for (uint32_t y = 0; y < 8; y++)
     {
         uint8_t line_data[4] = {};
@@ -83,9 +149,9 @@ static void process_tile (pixel_t *buffer, uint32_t stride)
             }
         }
 
-        printf ("0x%02x%02x%02x%02x%s",
-                line_data [3], line_data [2], line_data [1], line_data [0],
-                (y < 7) ? ", " : ",\n");
+        fprintf (pattern_file, "0x%02x%02x%02x%02x%s",
+                 line_data [3], line_data [2], line_data [1], line_data [0],
+                 (y < 7) ? ", " : ",\n");
     }
 
     pattern_index++;
@@ -97,7 +163,7 @@ static void process_tile (pixel_t *buffer, uint32_t stride)
  */
 static void generate_pattern_index (char *name)
 {
-    printf ("#define PATTERN_");
+    fprintf (pattern_index_file, "#define PATTERN_");
 
     for (char c = *name; *name != '\0'; c = *++name)
     {
@@ -111,10 +177,10 @@ static void generate_pattern_index (char *name)
             c = '_';
         }
 
-        printf ("%c", toupper(c));
+        fprintf (pattern_index_file, "%c", toupper(c));
     }
 
-    printf (" %d\n", pattern_index);
+    fprintf (pattern_index_file, " %d\n", pattern_index);
 }
 
 
@@ -125,7 +191,7 @@ static int process_image (pixel_t *buffer, uint32_t width, uint32_t height, char
 {
     generate_pattern_index (name);
 
-    printf ("\n    /* %s */\n", name);
+    fprintf (pattern_file, "\n    /* %s */\n", name);
     /* Sanity check */
     if ((width % 8 != 0) || (height % 8 != 0))
     {
@@ -158,6 +224,12 @@ static int process_file (char *name)
     {
         fprintf (stderr, "Error: Unable to open %s.\n", name);
         return -1;
+    }
+
+    /* Once the file has been opened, drop the path and use only the file name */
+    if (strrchr (name, '/') != NULL)
+    {
+        name = strrchr (name, '/') + 1;
     }
 
     /* Get the file size */
@@ -241,11 +313,11 @@ static int export_palette (void)
         return -1;
     }
 
-    printf ("const uint8_t palette [16] = { ");
+    fprintf (palette_file, "const uint8_t palette [16] = { ");
 
     for (uint32_t i = 0; i < palette_size; i++)
     {
-        printf ("0x%02x%s", palette [i], ((i + 1) < palette_size) ? ", " : " };\n");
+        fprintf (palette_file, "0x%02x%s", palette [i], ((i + 1) < palette_size) ? ", " : " };\n");
     }
 
     return 0;
@@ -280,18 +352,25 @@ int main (int argc, char **argv)
         }
     }
 
-    printf ("const uint32_t patterns [] = {\n");
-
-    for (uint32_t i = 0; i < argc; i++)
+    if (open_files () < 0)
     {
-        if (process_file (argv [i]) < 0)
-        {
-            rc = EXIT_FAILURE;
-            break;
-        }
+        rc = EXIT_FAILURE;
     }
+    else
+    {
+        fprintf (pattern_file, "const uint32_t patterns [] = {\n");
 
-    printf ("};\n\n");
+        for (uint32_t i = 0; i < argc; i++)
+        {
+            if (process_file (argv [i]) < 0)
+            {
+                rc = EXIT_FAILURE;
+                break;
+            }
+        }
+
+        fprintf (pattern_file, "};\n");
+    }
 
     if (rc == EXIT_SUCCESS)
     {
@@ -300,6 +379,8 @@ int main (int argc, char **argv)
             rc = EXIT_FAILURE;
         }
     }
+
+    close_files ();
 
     return rc;
 }
