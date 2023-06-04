@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,6 +22,7 @@ typedef struct pixel_s {
     uint8_t a;
 } pixel_t;
 
+static uint32_t pattern_index = 0;
 static uint8_t palette [16] = {};
 static uint32_t palette_size = 0;
 
@@ -85,6 +87,34 @@ static void process_tile (pixel_t *buffer, uint32_t stride)
                 line_data [3], line_data [2], line_data [1], line_data [0],
                 (y < 7) ? ", " : ",\n");
     }
+
+    pattern_index++;
+}
+
+
+/*
+ * Generate a #define for the index of the upcoming pattern.
+ */
+static void generate_pattern_index (char *name)
+{
+    printf ("#define PATTERN_");
+
+    for (char c = *name; *name != '\0'; c = *++name)
+    {
+        /* Don't include the file extension */
+        if (c == '.')
+        {
+            break;
+        }
+        if (!isalnum (c))
+        {
+            c = '_';
+        }
+
+        printf ("%c", toupper(c));
+    }
+
+    printf (" %d\n", pattern_index);
 }
 
 
@@ -93,6 +123,8 @@ static void process_tile (pixel_t *buffer, uint32_t stride)
  */
 static int process_image (pixel_t *buffer, uint32_t width, uint32_t height, char *name)
 {
+    generate_pattern_index (name);
+
     printf ("\n    /* %s */\n", name);
     /* Sanity check */
     if ((width % 8 != 0) || (height % 8 != 0))
@@ -141,7 +173,7 @@ int main (int argc, char **argv)
         }
     }
 
-    printf ("const uint32_t patterns [16] = {\n");
+    printf ("const uint32_t patterns [] = {\n");
 
     for (uint32_t i = 0; i < argc; i++)
     {
