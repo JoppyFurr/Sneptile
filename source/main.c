@@ -145,6 +145,113 @@ static int process_image (pixel_t *buffer, uint32_t width, uint32_t height, char
 }
 
 
+/*
+ * Process a single .png file.
+ */
+static int process_file (char *name)
+{
+    spng_ctx *spng_context = spng_ctx_new (0);
+
+    /* Try to open the file */
+    FILE *png_file = fopen (name, "r");
+    if (png_file == NULL)
+    {
+        fprintf (stderr, "Error: Unable to open %s.\n", name);
+        return -1;
+    }
+
+    /* Get the file size */
+    uint32_t png_size = 0;
+    fseek (png_file, 0, SEEK_END);
+    png_size = ftell (png_file);
+    rewind (png_file);
+
+    /* Allocate memory for the .png file */
+    uint8_t *png_buffer = calloc (png_size, 1);
+    if (png_buffer == NULL)
+    {
+        fprintf (stderr, "Error: Failed to allocate memory for %s.\n", name);
+        return -1;
+    }
+
+    /* Read and close the file */
+    uint32_t bytes_read = 0;
+    while (bytes_read < png_size)
+    {
+        bytes_read += fread (png_buffer + bytes_read, 1, png_size - bytes_read, png_file);
+    }
+    fclose (png_file);
+    png_file = NULL;
+
+    /* Get the decompressed image size */
+    size_t image_size = 0;
+    if (spng_set_png_buffer (spng_context, png_buffer, png_size) != 0)
+    {
+        fprintf (stderr, "Error: Failed to set file buffer for %s.\n", name);
+        return -1;
+    }
+
+    if (spng_decoded_image_size (spng_context, SPNG_FMT_RGBA8, &image_size) != 0)
+    {
+        fprintf (stderr, "Error: Failed to determine decompression size for %s.\n", name);
+        return -1;
+    }
+
+    /* Allocate memory for the decompressed image */
+    uint8_t *image_buffer = calloc (image_size, 1);
+    if (image_buffer == NULL)
+    {
+        fprintf (stderr, "Error: Failed to allocate decompression memory for %s.\n", name);
+        return -1;
+    }
+
+    /* Decode the image */
+    if (spng_decode_image (spng_context, image_buffer, image_size, SPNG_FMT_RGBA8, SPNG_DECODE_TRNS) != 0)
+    {
+        fprintf (stderr, "Error: Failed to decode image %s.\n", name);
+        return -1;
+    }
+
+    /* Process the image */
+    struct spng_ihdr header = {};
+    spng_get_ihdr(spng_context, &header);
+    if (process_image ((pixel_t *) image_buffer, header.width, header.height, name) != 0)
+    {
+        fprintf (stderr, "Error: Failed to process image %s.\n", name);
+        return -1;
+    }
+
+    /* Tidy up */
+    free (png_buffer);
+    free (image_buffer);
+    spng_ctx_free (spng_context);
+
+    return 0;
+}
+
+
+/*
+ * Export the palette array.
+ */
+static int export_palette (void)
+{
+    if (palette_size > 16)
+    {
+        fprintf (stderr, "Error: Exceeded palette limit with %d colours.\n", palette_size);
+        return -1;
+    }
+
+    printf ("const uint8_t palette [16] = { ");
+
+    for (uint32_t i = 0; i < palette_size; i++)
+    {
+        printf ("0x%02x%s", palette [i], ((i + 1) < palette_size) ? ", " : " };\n");
+    }
+
+    return 0;
+}
+
+
 int main (int argc, char **argv)
 {
     int rc = EXIT_SUCCESS;
@@ -177,103 +284,20 @@ int main (int argc, char **argv)
 
     for (uint32_t i = 0; i < argc; i++)
     {
-        spng_ctx *spng_context = spng_ctx_new (0);
-
-        /* Try to open the file */
-        FILE *png_file = fopen (argv [i], "r");
-        if (png_file == NULL)
+        if (process_file (argv [i]) < 0)
         {
-            fprintf (stderr, "Error: Unable to open %s.\n", argv [i]);
             rc = EXIT_FAILURE;
             break;
         }
-
-        /* Get the file size */
-        uint32_t png_size = 0;
-        fseek (png_file, 0, SEEK_END);
-        png_size = ftell (png_file);
-        rewind (png_file);
-
-        /* Allocate memory for the .png file */
-        uint8_t *png_buffer = calloc (png_size, 1);
-        if (png_buffer == NULL)
-        {
-            fprintf (stderr, "Error: Failed to allocate memory for %s.\n", argv [i]);
-            rc = EXIT_FAILURE;
-            break;
-        }
-
-        /* Read and close the file */
-        uint32_t bytes_read = 0;
-        while (bytes_read < png_size)
-        {
-            bytes_read += fread (png_buffer + bytes_read, 1, png_size - bytes_read, png_file);
-        }
-        fclose (png_file);
-        png_file = NULL;
-
-        /* Get the decompressed image size */
-        size_t image_size = 0;
-        if (spng_set_png_buffer (spng_context, png_buffer, png_size) != 0)
-        {
-            fprintf (stderr, "Error: Failed to set file buffer for %s.\n", argv [i]);
-            rc = EXIT_FAILURE;
-            break;
-        }
-
-        if (spng_decoded_image_size (spng_context, SPNG_FMT_RGBA8, &image_size) != 0)
-        {
-            fprintf (stderr, "Error: Failed to determine decompression size for %s.\n", argv [i]);
-            rc = EXIT_FAILURE;
-            break;
-        }
-
-        /* Allocate memory for the decompressed image */
-        uint8_t *image_buffer = calloc (image_size, 1);
-        if (image_buffer == NULL)
-        {
-            fprintf (stderr, "Error: Failed to allocate decompression memory for %s.\n", argv [i]);
-            rc = EXIT_FAILURE;
-            break;
-        }
-
-        /* Decode the image */
-        if (spng_decode_image (spng_context, image_buffer, image_size, SPNG_FMT_RGBA8, SPNG_DECODE_TRNS) != 0)
-        {
-            fprintf (stderr, "Error: Failed to decode image %s.\n", argv [i]);
-            rc = EXIT_FAILURE;
-            break;
-        }
-
-        /* Process the image */
-        struct spng_ihdr header = {};
-        spng_get_ihdr(spng_context, &header);
-        if (process_image ((pixel_t *) image_buffer, header.width, header.height, argv [i]) != 0)
-        {
-            fprintf (stderr, "Error: Failed to process image %s.\n", argv [i]);
-            rc = EXIT_FAILURE;
-            break;
-        }
-
-        /* Tidy up */
-        free (png_buffer);
-        free (image_buffer);
-        spng_ctx_free (spng_context);
     }
+
     printf ("};\n\n");
 
-    if (palette_size > 16)
+    if (rc == EXIT_SUCCESS)
     {
-        fprintf (stderr, "Error: Exceeded palette limit with %d colours.\n", palette_size);
-        rc = EXIT_FAILURE;
-    }
-    else
-    {
-        printf ("const uint8_t palette [16] = { ");
-
-        for (uint32_t i = 0; i < palette_size; i++)
+        if (export_palette () < 0)
         {
-            printf ("0x%02x%s", palette [i], ((i + 1) < palette_size) ? ", " : " };\n");
+            rc = EXIT_FAILURE;
         }
     }
 
