@@ -1,8 +1,15 @@
+/*
+ * Sneptile
+ * Joppy Furr 2023
+ */
+
+#define _GNU_SOURCE
 #include <ctype.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include <spng.h>
 
@@ -27,6 +34,7 @@ static uint32_t pattern_index = 0;
 static uint8_t palette [16] = {};
 static uint32_t palette_size = 0;
 
+char *output_dir = NULL;
 FILE *palette_file = NULL;
 FILE *pattern_file = NULL;
 FILE *pattern_index_file = NULL;
@@ -37,33 +45,50 @@ FILE *pattern_index_file = NULL;
  */
 static int open_files (void)
 {
-    /* TODO: User-specidied output directory */
+    char *pattern_path = "pattern.h";
+    char *pattern_index_path = "pattern_index.h";
+    char *palette_path = "palette.h";
+    int rc = 0;
 
-    pattern_file = fopen ("pattern.h", "w");
+    /* If the user has specified an output
+     * directory, create and change into it */
+    if (output_dir != NULL)
+    {
+        mkdir (output_dir, S_IRWXU);
+        asprintf (&pattern_path, "%s/pattern.h", output_dir);
+        asprintf (&pattern_index_path, "%s/pattern_index.h", output_dir);
+        asprintf (&palette_path, "%s/palette.h", output_dir);
+    }
+
+    pattern_file = fopen (pattern_path, "w");
     if (pattern_file == NULL)
     {
-        /* TODO */
-        fprintf (stderr, "Unable to open ...");
-        return -1;
+        fprintf (stderr, "Unable to open output file pattern.h\n");
+        rc = -1;
     }
 
-    pattern_index_file = fopen ("pattern_index.h", "w");
+    pattern_index_file = fopen (pattern_index_path, "w");
     if (pattern_index_file == NULL)
     {
-        /* TODO */
-        fprintf (stderr, "Unable to open ...");
-        return -1;
+        fprintf (stderr, "Unable to open output file pattern_index.h\n");
+        rc = -1;
     }
 
-    palette_file = fopen ("palette.h", "w");
+    palette_file = fopen (palette_path, "w");
     if (palette_file == NULL)
     {
-        /* TODO */
-        fprintf (stderr, "Unable to open ...");
-        return -1;
+        fprintf (stderr, "Unable to open output file palette.h\n");
+        rc = -1;
     }
 
-    return 0;
+    if (output_dir != NULL)
+    {
+        free (pattern_path);
+        free (pattern_index_path);
+        free (palette_path);
+    }
+
+    return rc;
 }
 
 
@@ -330,13 +355,21 @@ int main (int argc, char **argv)
 
     if (argc < 2)
     {
-        fprintf (stderr, "Usage: %s [--palette 0x00 0x01..] <tiles.png>\n", argv [0]);
+        fprintf (stderr, "Usage: %s [--output <dir>] [--palette <0x00 0x01..>] <tiles.png>\n", argv [0]);
         return EXIT_FAILURE;
     }
     argv++;
     argc--;
 
-    /* Accept a user-initialized palette */
+    /* User-specified output directory */
+    if (strcmp (argv [0], "--output") == 0 && argc > 2)
+    {
+        output_dir = argv [1];
+        argv += 2;
+        argc -= 2;
+    }
+
+    /* User-initialized palette */
     if (strcmp (argv [0], "--palette") == 0)
     {
         while (++argv, --argc)
