@@ -1,6 +1,16 @@
 /*
  * Sneptile
  * Joppy Furr 2023
+ *
+ * This is a tool to generate pattern data for the
+ * Sega Master System VDP, from a set of .png images.
+ *
+ * To Do list:
+ *  - 'sprite mode' to not match on palette index 0
+ *  - 'tall sprite mode' vertical tile ordering
+ *  - Option for removing duplicate tiles
+ *  - Option to generate tile maps for larger images
+ *  - Option to help automate colour-cycling
  */
 
 #define _GNU_SOURCE
@@ -12,16 +22,6 @@
 #include <sys/stat.h>
 
 #include <spng.h>
-
-/* TODO:
- *  - Output an updated palette as source
- *  - Output patterns as source
- *  - Output defines for pattern indexes based on file name
- *  - Option for tall-sprite-mode tile ordering
- *  - Detect and remove duplicate tiles
- *  - Some way to specify index for colour cycling
- *  - A sprite-mode to not colour-match against index 0
- */
 
 typedef struct pixel_s {
     uint8_t r;
