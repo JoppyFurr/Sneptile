@@ -1,6 +1,6 @@
 /*
  * Sneptile
- * Joppy Furr 2023
+ * Joppy Furr 2024
  *
  * This is a tool to generate pattern data for the
  * Sega Master System VDP, from a set of .png images.
@@ -13,8 +13,7 @@
  *  - Option to help automate colour-cycling
  */
 
-#define _GNU_SOURCE
-#include <ctype.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,200 +22,32 @@
 
 #include <spng.h>
 
-typedef struct pixel_s {
-    uint8_t r;
-    uint8_t g;
-    uint8_t b;
-    uint8_t a;
-} pixel_t;
+#include "sneptile.h"
+#include "sms_vdp.h"
+#include "tms9928a.h"
 
-static uint32_t pattern_index = 0;
-static uint8_t palette [16] = {};
-static uint32_t palette_size = 0;
-
+/* Global State */
+target_t target = VDP_MODE_4;
 char *output_dir = NULL;
-FILE *palette_file = NULL;
-FILE *pattern_file = NULL;
-FILE *pattern_index_file = NULL;
 
 
 /*
- * Open the three output files.
+ * Process an image made up of 8×8 tiles.
  */
-static int open_files (void)
+static int sneptile_process_image (pixel_t *buffer, uint32_t width, uint32_t height, char *name)
 {
-    char *pattern_path = "pattern.h";
-    char *pattern_index_path = "pattern_index.h";
-    char *palette_path = "palette.h";
-    int rc = 0;
-
-    /* If the user has specified an output
-     * directory, create and change into it */
-    if (output_dir != NULL)
+    switch (target)
     {
-        mkdir (output_dir, S_IRWXU);
-        asprintf (&pattern_path, "%s/pattern.h", output_dir);
-        asprintf (&pattern_index_path, "%s/pattern_index.h", output_dir);
-        asprintf (&palette_path, "%s/palette.h", output_dir);
-    }
-
-    pattern_file = fopen (pattern_path, "w");
-    if (pattern_file == NULL)
-    {
-        fprintf (stderr, "Unable to open output file pattern.h\n");
-        rc = -1;
-    }
-
-    pattern_index_file = fopen (pattern_index_path, "w");
-    if (pattern_index_file == NULL)
-    {
-        fprintf (stderr, "Unable to open output file pattern_index.h\n");
-        rc = -1;
-    }
-
-    palette_file = fopen (palette_path, "w");
-    if (palette_file == NULL)
-    {
-        fprintf (stderr, "Unable to open output file palette.h\n");
-        rc = -1;
-    }
-
-    if (output_dir != NULL)
-    {
-        free (pattern_path);
-        free (pattern_index_path);
-        free (palette_path);
-    }
-
-    return rc;
-}
-
-
-/*
- * Close the three output files.
- */
-static void close_files (void)
-{
-    if (pattern_file != NULL)
-    {
-        fclose (pattern_file);
-        pattern_file = NULL;
-    }
-
-    if (pattern_index_file != NULL)
-    {
-        fclose (pattern_index_file);
-        pattern_index_file = NULL;
-    }
-
-    if (palette_file != NULL)
-    {
-        fclose (palette_file);
-        palette_file = NULL;
-    }
-}
-
-
-/*
- * Convert from colour to palette index.
- * New colours are added to the palette as needed.
- */
-static uint8_t colour_to_index (uint8_t colour)
-{
-    /* First, check if the colour is already in the palette */
-    for (uint32_t i = 0; i < palette_size; i++)
-    {
-        if (palette [i] == colour)
-        {
-            return i;
-        }
-    }
-
-    /* If not, add it */
-    palette [palette_size] = colour;
-
-    return palette_size++;
-}
-
-
-/*
- * Process a single 8x8 tile.
- */
-static void process_tile (pixel_t *buffer, uint32_t stride)
-{
-    fprintf (pattern_file, "    ");
-    for (uint32_t y = 0; y < 8; y++)
-    {
-        uint8_t line_data[4] = {};
-
-        for (uint32_t x = 0; x < 8; x++)
-        {
-            uint8_t index = 0;
-            pixel_t p = buffer [x + y * stride];
-
-            /* If the pixel is non-transparent, calculate its colour index */
-            if (p.a != 0)
-            {
-                uint8_t colour = ((p.r & 0xc0) >> 6)
-                               | ((p.g & 0xc0) >> 4)
-                               | ((p.b & 0xc0) >> 2);
-
-                index = colour_to_index (colour);;
-            }
-
-            /* Convert index to bitplane representation */
-            for (uint32_t i = 0; i < 4; i++)
-            {
-                if (index & (1 << i))
-                {
-                    line_data [i] |= (1 << (7 - x));
-                }
-            }
-        }
-
-        fprintf (pattern_file, "0x%02x%02x%02x%02x%s",
-                 line_data [3], line_data [2], line_data [1], line_data [0],
-                 (y < 7) ? ", " : ",\n");
-    }
-
-    pattern_index++;
-}
-
-
-/*
- * Generate a #define for the index of the upcoming pattern.
- */
-static void generate_pattern_index (char *name)
-{
-    fprintf (pattern_index_file, "#define PATTERN_");
-
-    for (char c = *name; *name != '\0'; c = *++name)
-    {
-        /* Don't include the file extension */
-        if (c == '.')
-        {
+        case VDP_MODE_0:
+            tms9928a_new_input_file (name);
             break;
-        }
-        if (!isalnum (c))
-        {
-            c = '_';
-        }
-
-        fprintf (pattern_index_file, "%c", toupper(c));
+        case VDP_MODE_4:
+            mode4_new_input_file (name);
+            break;
+        default:
+            break;
     }
 
-    fprintf (pattern_index_file, " %d\n", pattern_index);
-}
-
-
-/*
- * Process an image made up of 8x8 tiles.
- */
-static int process_image (pixel_t *buffer, uint32_t width, uint32_t height, char *name)
-{
-    generate_pattern_index (name);
-
-    fprintf (pattern_file, "\n    /* %s */\n", name);
     /* Sanity check */
     if ((width % 8 != 0) || (height % 8 != 0))
     {
@@ -228,7 +59,17 @@ static int process_image (pixel_t *buffer, uint32_t width, uint32_t height, char
     {
         for (uint32_t col = 0; col < width; col += 8)
         {
-            process_tile (&buffer [row * width + col], width);
+            switch (target)
+            {
+                case VDP_MODE_0:
+                    tms9928a_process_tile (&buffer [row * width + col], width);
+                    break;
+                case VDP_MODE_4:
+                    mode4_process_tile (&buffer [row * width + col], width);
+                    break;
+                default:
+                    break;
+            }
         }
     }
 
@@ -239,7 +80,7 @@ static int process_image (pixel_t *buffer, uint32_t width, uint32_t height, char
 /*
  * Process a single .png file.
  */
-static int process_file (char *name)
+static int sneptile_process_file (char *name)
 {
     spng_ctx *spng_context = spng_ctx_new (0);
 
@@ -248,7 +89,7 @@ static int process_file (char *name)
     if (png_file == NULL)
     {
         fprintf (stderr, "Error: Unable to open %s.\n", name);
-        return -1;
+        return RC_ERROR;
     }
 
     /* Once the file has been opened, drop the path and use only the file name */
@@ -268,7 +109,7 @@ static int process_file (char *name)
     if (png_buffer == NULL)
     {
         fprintf (stderr, "Error: Failed to allocate memory for %s.\n", name);
-        return -1;
+        return RC_ERROR;
     }
 
     /* Read and close the file */
@@ -285,13 +126,13 @@ static int process_file (char *name)
     if (spng_set_png_buffer (spng_context, png_buffer, png_size) != 0)
     {
         fprintf (stderr, "Error: Failed to set file buffer for %s.\n", name);
-        return -1;
+        return RC_ERROR;
     }
 
     if (spng_decoded_image_size (spng_context, SPNG_FMT_RGBA8, &image_size) != 0)
     {
         fprintf (stderr, "Error: Failed to determine decompression size for %s.\n", name);
-        return -1;
+        return RC_ERROR;
     }
 
     /* Allocate memory for the decompressed image */
@@ -299,23 +140,23 @@ static int process_file (char *name)
     if (image_buffer == NULL)
     {
         fprintf (stderr, "Error: Failed to allocate decompression memory for %s.\n", name);
-        return -1;
+        return RC_ERROR;
     }
 
     /* Decode the image */
     if (spng_decode_image (spng_context, image_buffer, image_size, SPNG_FMT_RGBA8, SPNG_DECODE_TRNS) != 0)
     {
         fprintf (stderr, "Error: Failed to decode image %s.\n", name);
-        return -1;
+        return RC_ERROR;
     }
 
     /* Process the image */
-    struct spng_ihdr header = {};
+    struct spng_ihdr header = { };
     spng_get_ihdr(spng_context, &header);
-    if (process_image ((pixel_t *) image_buffer, header.width, header.height, name) != 0)
+    if (sneptile_process_image ((pixel_t *) image_buffer, header.width, header.height, name) != 0)
     {
         fprintf (stderr, "Error: Failed to process image %s.\n", name);
-        return -1;
+        return RC_ERROR;
     }
 
     /* Tidy up */
@@ -323,71 +164,32 @@ static int process_file (char *name)
     free (image_buffer);
     spng_ctx_free (spng_context);
 
-    return 0;
+    return RC_OK;
 }
 
 
 /*
- * Convert from 6-bit SMS colour to the equivalent 12-bit GG colour.
+ * Entry point.
  */
-static uint16_t sms_colour_to_gg (uint8_t sms_colour)
-{
-    uint16_t gg_colour = 0;
-
-    gg_colour |=  (sms_colour      & 0x03) * 5;         /* Red */
-    gg_colour |= ((sms_colour >> 2 & 0x03) * 5) << 4;   /* Green */
-    gg_colour |= ((sms_colour >> 4 & 0x03) * 5) << 8;   /* Blue */
-
-    return gg_colour;
-}
-
-
-/*
- * Export the palette array.
- */
-static int export_palette (void)
-{
-    if (palette_size > 16)
-    {
-        fprintf (stderr, "Error: Exceeded palette limit with %d colours.\n", palette_size);
-        return -1;
-    }
-
-    /* SMS Palette */
-    fprintf (palette_file, "#ifdef TARGET_SMS\n");
-    fprintf (palette_file, "static const uint8_t palette [16] = { ");
-
-    for (uint32_t i = 0; i < palette_size; i++)
-    {
-        fprintf (palette_file, "0x%02x%s", palette [i], ((i + 1) < palette_size) ? ", " : " };\n");
-    }
-
-    /* GG Palette */
-    fprintf (palette_file, "#elif defined (TARGET_GG)\n");
-    fprintf (palette_file, "static const uint16_t palette [16] = { ");
-
-    for (uint32_t i = 0; i < palette_size; i++)
-    {
-        fprintf (palette_file, "0x%04x%s", sms_colour_to_gg (palette [i]), ((i + 1) < palette_size) ? ", " : " };\n");
-    }
-
-    fprintf (palette_file, "#endif\n");
-
-    return 0;
-}
-
-
 int main (int argc, char **argv)
 {
-    int rc = EXIT_SUCCESS;
+    int rc = 0;
 
     if (argc < 2)
     {
-        fprintf (stderr, "Usage: %s [--output <dir>] [--palette <0x00 0x01..>] <tiles.png>\n", argv [0]);
+        fprintf (stderr, "Usage: %s [--mode-0] [--output <dir>] [--palette <0x00 0x01..>] <tiles.png>\n", argv [0]);
         return EXIT_FAILURE;
     }
     argv++;
     argc--;
+
+    /* VDP Mode */
+    if (strcmp (argv [0], "--mode-0") == 0)
+    {
+        target = VDP_MODE_0;
+        argv += 1;
+        argc -= 1;
+    }
 
     /* User-specified output directory */
     if (strcmp (argv [0], "--output") == 0 && argc > 2)
@@ -397,14 +199,14 @@ int main (int argc, char **argv)
         argc -= 2;
     }
 
-    /* User-initialized palette */
+    /* User-initialized mode-4 palette */
     if (strcmp (argv [0], "--palette") == 0)
     {
         while (++argv, --argc)
         {
             if (strncmp (argv [0], "0x", 2) == 0 && strlen (argv[0]) == 4)
             {
-                palette [palette_size++] = strtol (argv [0], NULL, 16);
+                mode4_palette_add_colour (strtol (argv [0], NULL, 16));
             }
             else
             {
@@ -413,35 +215,52 @@ int main (int argc, char **argv)
         }
     }
 
-    if (open_files () < 0)
+    /* Create the output directory if one has been specified. */
+    if (output_dir != NULL)
     {
-        rc = EXIT_FAILURE;
+        mkdir (output_dir, S_IRWXU);
     }
-    else
-    {
-        fprintf (pattern_file, "static const uint32_t patterns [] = {\n");
 
+    /* Open the output files */
+    switch (target)
+    {
+        case VDP_MODE_0:
+            rc = tms9928a_open_files ();
+            break;
+        case VDP_MODE_4:
+            rc = mode4_open_files ();
+            break;
+        default:
+            break;
+    }
+
+    if (rc == RC_OK)
+    {
         for (uint32_t i = 0; i < argc; i++)
         {
-            if (process_file (argv [i]) < 0)
+            rc = sneptile_process_file (argv [i]);
+            if (rc != RC_OK)
             {
-                rc = EXIT_FAILURE;
                 break;
             }
         }
-
-        fprintf (pattern_file, "};\n");
     }
 
-    if (rc == EXIT_SUCCESS)
+    if (rc == RC_OK)
     {
-        if (export_palette () < 0)
+        /* Finalize and close the output files */
+        switch (target)
         {
-            rc = EXIT_FAILURE;
+            case VDP_MODE_0:
+                rc = tms9928a_close_files ();
+                break;
+            case VDP_MODE_4:
+                rc = mode4_close_files ();
+                break;
+            default:
+                break;
         }
     }
 
-    close_files ();
-
-    return rc;
+    return rc == RC_OK ? EXIT_SUCCESS : EXIT_FAILURE;
 }
