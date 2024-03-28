@@ -8,6 +8,7 @@ Tiles are generated left-to-right, top-to-bottom, first file to last file.
 Usage: `./Sneptile [--mode-0] --output tile_data --palette 0x04 0x19 empty.png cursor.png`
 
  * `--mode-0`: Generate Mode-0 tiles.
+ * `--mode-2`: Generate Mode-2 tiles.
  * `--output <dir>`: specifies the directory for the generated files
  * `--palette <0x...>`: specifies the first n entries of the palette
  * `... <.png>`: the remaining parameters are `.png` images to generate tiles from
@@ -58,9 +59,9 @@ re-use on the Game Gear.
 
 To select the correct palette, you will need to define one of `TARGET_SMS` or `TARGET_GG`.
 
-## TMS99xx Mode 0
+## TMS99xx Mode-0 and Mode-2
 
-Initial support is also available for Mode 0 of the TMS9918 family.
+Initial support is also available for Mode-0 and Mode-2 of the TMS9918 family.
 
 Three files are output:
  * `pattern.h`: Contains the pattern data to load into the VDP.
