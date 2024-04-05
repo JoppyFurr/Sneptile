@@ -34,12 +34,21 @@ char *output_dir = NULL;
 /*
  * Process an image made up of 8×8 tiles.
  */
-static int sneptile_process_image (pixel_t *buffer, uint32_t width, uint32_t height, char *name)
+static int sneptile_process_image (pixel_t *buffer, uint32_t image_width, uint32_t image_height, char *name)
 {
+    uint32_t tile_width = 8;
+    uint32_t tile_height = 8;
+
     switch (target)
     {
         case VDP_MODE_0:
         case VDP_MODE_2:
+        case VDP_MODE_TMS_SMALL_SPRITES:
+            tms9928a_new_input_file (name);
+            break;
+        case VDP_MODE_TMS_LARGE_SPRITES:
+            tile_width = 16;
+            tile_height = 16;
             tms9928a_new_input_file (name);
             break;
         case VDP_MODE_4:
@@ -50,24 +59,26 @@ static int sneptile_process_image (pixel_t *buffer, uint32_t width, uint32_t hei
     }
 
     /* Sanity check */
-    if ((width % 8 != 0) || (height % 8 != 0))
+    if ((image_width % tile_width != 0) || (image_height % tile_height != 0))
     {
-        fprintf (stderr, "Error: Invalid resoulution %ux%u\n", width, height);
+        fprintf (stderr, "Error: Invalid resolution %ux%u\n", image_width, image_height);
         return -1;
     }
 
-    for (uint32_t row = 0; row < height; row += 8)
+    for (uint32_t row = 0; row < image_height; row += tile_height)
     {
-        for (uint32_t col = 0; col < width; col += 8)
+        for (uint32_t col = 0; col < image_width; col += tile_width)
         {
             switch (target)
             {
                 case VDP_MODE_0:
                 case VDP_MODE_2:
-                    tms9928a_process_tile (&buffer [row * width + col], width);
+                case VDP_MODE_TMS_SMALL_SPRITES:
+                case VDP_MODE_TMS_LARGE_SPRITES:
+                    tms9928a_process_tile (&buffer [row * image_width + col], image_width);
                     break;
                 case VDP_MODE_4:
-                    mode4_process_tile (&buffer [row * width + col], width);
+                    mode4_process_tile (&buffer [row * image_width + col], image_width);
                     break;
                 default:
                     break;
@@ -198,6 +209,18 @@ int main (int argc, char **argv)
         argv += 1;
         argc -= 1;
     }
+    else if (strcmp (argv [0], "--tms-small-sprites") == 0)
+    {
+        target = VDP_MODE_TMS_SMALL_SPRITES;
+        argv += 1;
+        argc -= 1;
+    }
+    else if (strcmp (argv [0], "--tms-large-sprites") == 0)
+    {
+        target = VDP_MODE_TMS_LARGE_SPRITES;
+        argv += 1;
+        argc -= 1;
+    }
 
     /* User-specified output directory */
     if (strcmp (argv [0], "--output") == 0 && argc > 2)
@@ -234,6 +257,8 @@ int main (int argc, char **argv)
     {
         case VDP_MODE_0:
         case VDP_MODE_2:
+        case VDP_MODE_TMS_SMALL_SPRITES:
+        case VDP_MODE_TMS_LARGE_SPRITES:
             rc = tms9928a_open_files ();
             break;
         case VDP_MODE_4:
@@ -262,6 +287,8 @@ int main (int argc, char **argv)
         {
             case VDP_MODE_0:
             case VDP_MODE_2:
+            case VDP_MODE_TMS_SMALL_SPRITES:
+            case VDP_MODE_TMS_LARGE_SPRITES:
                 rc = tms9928a_close_files ();
                 break;
             case VDP_MODE_4:

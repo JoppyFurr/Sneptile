@@ -28,7 +28,7 @@ static FILE *palette_file = NULL;
  */
 int mode4_open_files (void)
 {
-    char *pattern_path = "pattern.h";
+    char *patterns_path = "patterns.h";
     char *pattern_index_path = "pattern_index.h";
     char *palette_path = "palette.h";
 
@@ -36,15 +36,15 @@ int mode4_open_files (void)
      * directory, create and change into it */
     if (output_dir != NULL)
     {
-        asprintf (&pattern_path, "%s/pattern.h", output_dir);
-        asprintf (&pattern_index_path, "%s/pattern_index.h", output_dir);
-        asprintf (&palette_path, "%s/palette.h", output_dir);
+        asprintf (&patterns_path, "%s/%s", output_dir, patterns_path);
+        asprintf (&pattern_index_path, "%s/%s", output_dir, pattern_index_path);
+        asprintf (&palette_path, "%s/%s", output_dir, palette_path);
     }
 
-    pattern_file = fopen (pattern_path, "w");
+    pattern_file = fopen (patterns_path, "w");
     if (pattern_file == NULL)
     {
-        fprintf (stderr, "Unable to open output file pattern.h\n");
+        fprintf (stderr, "Unable to open output file patterns.h\n");
         return RC_ERROR;
     }
     fprintf (pattern_file, "static const uint32_t patterns [] = {\n");
@@ -65,7 +65,7 @@ int mode4_open_files (void)
 
     if (output_dir != NULL)
     {
-        free (pattern_path);
+        free (patterns_path);
         free (pattern_index_path);
         free (palette_path);
     }

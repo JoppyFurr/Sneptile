@@ -9,13 +9,15 @@ Usage: `./Sneptile [--mode-0] --output tile_data --palette 0x04 0x19 empty.png c
 
  * `--mode-0`: Generate Mode-0 tiles.
  * `--mode-2`: Generate Mode-2 tiles.
+ * `--tms-small-sprites`: Generate 8x8 sprites for the TMS modes.
+ * `--tms-large-sprites`: Generate 16x16 sprites for the TMS modes.
  * `--output <dir>`: specifies the directory for the generated files
  * `--palette <0x...>`: specifies the first n entries of the palette
  * `... <.png>`: the remaining parameters are `.png` images to generate tiles from
 
 The following three files are generated in the specified output directory:
 
-pattern.h contains the pattern data to load into the VDP:
+patterns.h contains the pattern data to load into the VDP:
 ```
 const uint32_t patterns [] = {
 
@@ -64,7 +66,7 @@ To select the correct palette, you will need to define one of `TARGET_SMS` or `T
 Initial support is also available for Mode-0 and Mode-2 of the TMS9918 family.
 
 Three files are output:
- * `pattern.h`: Contains the pattern data to load into the VDP.
+ * `patterns.h`: Contains the pattern data to load into the VDP.
  * `pattern_index.h`: Contains the index of the first tile from each image file.
  * `colour_table.h`: Contains the colour table to load into the VDP.
 
@@ -100,6 +102,16 @@ static const pixel_t tms9928a_palette [16] = {
     { .r = 0xff, .g = 0xff, .b = 0xff }     /* White */
 };
 ```
+
+## TMS99xx Sprites
+Sprites are generated when using `--tms-small-sprites` or `--tms-large-sprites`.
+The output files:
+ * For 8x8 sprites: `sprites.h` and `sprite_index.h`
+ * For 16x16 sprites: `sprites_l.h` and `sprite_index_l.h`
+
+As each sprite is only a single colour configured in the attribute table:
+ * Any transparent pixel is set to a `0` in the sprite bitmap.
+ * Any non-transparent pixel is set to a `1` in the sprite bitmap.
 
 ## Dependencies
  * zlib

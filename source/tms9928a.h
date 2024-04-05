@@ -12,5 +12,5 @@ int tms9928a_close_files (void);
 /* Mark the start of a new source file. */
 void tms9928a_new_input_file (const char *name);
 
-/* Process a single 8×8 tile. */
+/* Process a single tile. */
 void tms9928a_process_tile (pixel_t *buffer, uint32_t stride);

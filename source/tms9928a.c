@@ -59,27 +59,53 @@ static const pixel_t tms9928a_palette [16] = {
  */
 int tms9928a_open_files (void)
 {
-    char *pattern_path = "pattern.h";
+    char *patterns_path = "patterns.h";
     char *pattern_index_path = "pattern_index.h";
     char *colour_table_path = "colour_table.h";
+
+    /* Give sprite modes a different name, so that
+     * they can be used in the same project alongside
+     * background tiles. */
+    if (target == VDP_MODE_TMS_SMALL_SPRITES)
+    {
+        patterns_path = "sprites.h";
+        pattern_index_path = "sprite_index.h";
+    }
+    else if (target == VDP_MODE_TMS_LARGE_SPRITES)
+    {
+        patterns_path = "sprites_l.h";
+        pattern_index_path = "sprite_index_l.h";
+    }
 
     /* If the user has specified an output
      * directory, create and change into it */
     if (output_dir != NULL)
     {
-        asprintf (&pattern_path, "%s/pattern.h", output_dir);
-        asprintf (&pattern_index_path, "%s/pattern_index.h", output_dir);
-        asprintf (&colour_table_path, "%s/colour_table.h", output_dir);
+        asprintf (&patterns_path, "%s/%s", output_dir, patterns_path);
+        asprintf (&pattern_index_path, "%s/%s", output_dir, pattern_index_path);
+        asprintf (&colour_table_path, "%s/%s", output_dir, colour_table_path);
     }
 
     /* Pattern file */
-    pattern_file = fopen (pattern_path, "w");
+    pattern_file = fopen (patterns_path, "w");
     if (pattern_file == NULL)
     {
-        fprintf (stderr, "Unable to open output file pattern.h\n");
+        fprintf (stderr, "Unable to open output file patterns.h\n");
         return RC_ERROR;
     }
-    fprintf (pattern_file, "static const uint32_t patterns [] = {\n");
+
+    if (target == VDP_MODE_TMS_SMALL_SPRITES)
+    {
+        fprintf (pattern_file, "static const uint32_t sprites [] = {\n");
+    }
+    else if (target == VDP_MODE_TMS_LARGE_SPRITES)
+    {
+        fprintf (pattern_file, "static const uint32_t sprites_l [] = {\n");
+    }
+    else
+    {
+        fprintf (pattern_file, "static const uint32_t patterns [] = {\n");
+    }
 
     /* Pattern index file */
     pattern_index_file = fopen (pattern_index_path, "w");
@@ -89,18 +115,22 @@ int tms9928a_open_files (void)
         return RC_ERROR;
     }
 
-    /* Colour table file */
-    colour_table_file = fopen (colour_table_path, "w");
-    if (colour_table_file == NULL)
+    /* Mode-0 and Mode-2 tile maps use a colour table, but sprites do not. */
+    if (target == VDP_MODE_0 || target == VDP_MODE_2)
     {
-        fprintf (stderr, "Unable to open output file colour_table.h\n");
-        return RC_ERROR;
+        /* Colour table file */
+        colour_table_file = fopen (colour_table_path, "w");
+        if (colour_table_file == NULL)
+        {
+            fprintf (stderr, "Unable to open output file colour_table.h\n");
+            return RC_ERROR;
+        }
+        fprintf (colour_table_file, "static const %s colour_table [] = {\n", (target == VDP_MODE_0) ? "uint8_t" : "uint32_t");
     }
-    fprintf (colour_table_file, "static const %s colour_table [] = {\n", (target == VDP_MODE_0) ? "uint8_t" : "uint32_t");
 
     if (output_dir != NULL)
     {
-        free (pattern_path);
+        free (patterns_path);
         free (pattern_index_path);
         free (colour_table_path);
     }
@@ -186,15 +216,18 @@ int tms9928a_close_files (void)
     fclose (pattern_index_file);
     pattern_index_file = NULL;
 
-    /* Colour table file */
-    if (target == VDP_MODE_0 && pattern_index % 8 != 0)
+    if (colour_table_file != NULL)
     {
-        tms9928a_mode0_emit_ct_entry ();
-    }
+        /* Colour table file */
+        if (target == VDP_MODE_0 && pattern_index % 8 != 0)
+        {
+            tms9928a_mode0_emit_ct_entry ();
+        }
 
-    fprintf (colour_table_file, "%s};\n", line_ct_index != 0 ? "\n" : "");
-    fclose (colour_table_file);
-    colour_table_file = NULL;
+        fprintf (colour_table_file, "%s};\n", line_ct_index != 0 ? "\n" : "");
+        fclose (colour_table_file);
+        colour_table_file = NULL;
+    }
 
     return RC_OK;
 }
@@ -298,6 +331,12 @@ static uint8_t tms9928a_rgb_to_ct_bit (pixel_t p)
 {
     uint8_t colour = tms9928a_rgb_to_colour_index (p);
 
+    /* For sprites, all we care about is whether the pixel is transparent or not */
+    if (target == VDP_MODE_TMS_SMALL_SPRITES || target == VDP_MODE_TMS_LARGE_SPRITES)
+    {
+        return colour != 0;
+    }
+
     /* Check if the colour is already in the colour-table byte */
     for (uint32_t i = 0; i < ct_entry_size; i++)
     {
@@ -394,7 +433,7 @@ static bool tms9928a_check_ct_compatible (void)
 /*
  * Process a single 8×8 tile.
  */
-void tms9928a_process_tile (pixel_t *buffer, uint32_t stride)
+static void tms9928a_process_tile_8 (pixel_t *buffer, uint32_t stride)
 {
     uint8_t pattern_lines [8] = { };
     uint8_t pattern_colours [8] = { }; /* For mode-2 */
@@ -480,10 +519,33 @@ void tms9928a_process_tile (pixel_t *buffer, uint32_t stride)
             tms9928a_mode0_emit_ct_entry ();
         }
     }
-    else
+    else if (target == VDP_MODE_2)
     {
         tms9928a_mode2_emit_ct_entry (pattern_colours);
     }
 
     pattern_index++;
+}
+
+
+/*
+ * Process a single tile.
+ * The tile size is 8×8 for the tile-map and small sprites.
+ * The tile size is 16×16 for large sprites.
+ */
+void tms9928a_process_tile (pixel_t *buffer, uint32_t stride)
+{
+    if (target == VDP_MODE_TMS_LARGE_SPRITES)
+    {
+        /* Sprite layout: 0 2
+         *                1 3 */
+        tms9928a_process_tile_8 (&buffer [0             ], stride);
+        tms9928a_process_tile_8 (&buffer [0 + 8 * stride], stride);
+        tms9928a_process_tile_8 (&buffer [8             ], stride);
+        tms9928a_process_tile_8 (&buffer [8 + 8 * stride], stride);
+    }
+    else
+    {
+        tms9928a_process_tile_8 (buffer, stride);
+    }
 }
