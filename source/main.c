@@ -28,7 +28,43 @@
 
 /* Global State */
 target_t target = VDP_MODE_4;
+bool de_duplicate = false;
 char *output_dir = NULL;
+
+/* De-duplication */
+void* unique_tiles [512];
+uint32_t unique_tiles_count = 0;
+
+
+/*
+ * Check if two 8x8 tiles are identical.
+ */
+static bool sneptile_check_match (pixel_t *tile_a, pixel_t *tile_b, uint32_t image_width)
+{
+    for (uint32_t row = 0; row < 8; row++)
+    {
+        if (memcmp (&tile_a [row * image_width], &tile_b [row * image_width], sizeof (pixel_t) * 8) != 0)
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+
+/*
+ * Check if an 8x8 tile is unique.
+ */
+static bool sneptile_check_unique (pixel_t *tile, uint32_t image_width)
+{
+    for (uint32_t i = 0; i < unique_tiles_count; i++)
+    {
+        if (sneptile_check_match (tile, unique_tiles [i], image_width))
+            return false;
+    }
+    return true;
+}
 
 
 /*
@@ -65,10 +101,25 @@ static int sneptile_process_image (pixel_t *buffer, uint32_t image_width, uint32
         return -1;
     }
 
+    unique_tiles_count = 0;
+
     for (uint32_t row = 0; row < image_height; row += tile_height)
     {
         for (uint32_t col = 0; col < image_width; col += tile_width)
         {
+
+            if (de_duplicate && unique_tiles_count < 512)
+            {
+                if (sneptile_check_unique (&buffer [row * image_width + col], image_width))
+                {
+                    unique_tiles [unique_tiles_count++] = &buffer [row * image_width + col];
+                }
+                else
+                {
+                    continue;
+                }
+            }
+
             switch (target)
             {
                 case VDP_MODE_0:
@@ -190,11 +241,19 @@ int main (int argc, char **argv)
 
     if (argc < 2)
     {
-        fprintf (stderr, "Usage: %s [--mode-0] [--output <dir>] [--palette <0x00 0x01..>] <tiles.png>\n", argv [0]);
+        fprintf (stderr, "Usage: %s [options] <tiles.png>\n", argv [0]);
+        fprintf (stderr, "    --mode-0 : Generate TMS99xx mode-0 patterns\n");
+        fprintf (stderr, "    --mode-2 : Generate TMS99xx mode-2 patterns\n");
+        fprintf (stderr, "    --tms-small-sprites : Generate TMS99xx sprite patterns (8x8)\n");
+        fprintf (stderr, "    --tms-large-sprites : Generate TMS99xx sprite patterns (16x16)\n");
+        fprintf (stderr, "    --de-duplicate : Within an input file, don't generate the same pattern twice\n");
+        fprintf (stderr, "    --output <dir> : Specify output directory\n");
+        fprintf (stderr, "    --palette <0x00 0x01..> : Pre-defined palette entries\n");
         return EXIT_FAILURE;
     }
     argv++;
     argc--;
+
 
     /* VDP Mode */
     if (strcmp (argv [0], "--mode-0") == 0)
@@ -218,6 +277,13 @@ int main (int argc, char **argv)
     else if (strcmp (argv [0], "--tms-large-sprites") == 0)
     {
         target = VDP_MODE_TMS_LARGE_SPRITES;
+        argv += 1;
+        argc -= 1;
+    }
+
+    if (strcmp (argv [0], "--de-duplicate") == 0)
+    {
+        de_duplicate = true;
         argv += 1;
         argc -= 1;
     }
