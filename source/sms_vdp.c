@@ -204,7 +204,8 @@ static uint8_t mode4_rgb_to_index (pixel_t p)
                    | ((p.b & 0xc0) >> 2);
 
     /* Next, check if the colour is already in the palette */
-    for (uint32_t i = 0; i < palette_size; i++)
+    uint32_t start = (target == VDP_MODE_4_SPRITES) ? 1 : 0;
+    for (uint32_t i = start; i < palette_size; i++)
     {
         if (palette [i] == colour)
         {

@@ -19,7 +19,8 @@ typedef enum target_e {
     VDP_MODE_2,
     VDP_MODE_TMS_SMALL_SPRITES,
     VDP_MODE_TMS_LARGE_SPRITES,
-    VDP_MODE_4
+    VDP_MODE_4,
+    VDP_MODE_4_SPRITES,
 } target_t;
 
 /* Global State */

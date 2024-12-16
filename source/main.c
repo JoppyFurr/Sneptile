@@ -88,6 +88,7 @@ static int sneptile_process_image (pixel_t *buffer, uint32_t image_width, uint32
             tms9928a_new_input_file (name);
             break;
         case VDP_MODE_4:
+        case VDP_MODE_4_SPRITES:
             mode4_new_input_file (name);
             break;
         default:
@@ -129,6 +130,7 @@ static int sneptile_process_image (pixel_t *buffer, uint32_t image_width, uint32
                     tms9928a_process_tile (&buffer [row * image_width + col], image_width);
                     break;
                 case VDP_MODE_4:
+                case VDP_MODE_4_SPRITES:
                     mode4_process_tile (&buffer [row * image_width + col], image_width);
                     break;
                 default:
@@ -247,6 +249,7 @@ int main (int argc, char **argv)
         fprintf (stderr, "    --tms-small-sprites : Generate TMS99xx sprite patterns (8x8)\n");
         fprintf (stderr, "    --tms-large-sprites : Generate TMS99xx sprite patterns (16x16)\n");
         fprintf (stderr, "    --de-duplicate : Within an input file, don't generate the same pattern twice\n");
+        fprintf (stderr, "    --sprites : Mode-4 sprites. Index 0 will not be used for visible colours.\n");
         fprintf (stderr, "    --output <dir> : Specify output directory\n");
         fprintf (stderr, "    --palette <0x00 0x01..> : Pre-defined palette entries\n");
         return EXIT_FAILURE;
@@ -255,60 +258,73 @@ int main (int argc, char **argv)
     argc--;
 
 
-    /* VDP Mode */
-    if (strcmp (argv [0], "--mode-0") == 0)
+    while (argc > 0)
     {
-        target = VDP_MODE_0;
-        argv += 1;
-        argc -= 1;
-    }
-    else if (strcmp (argv [0], "--mode-2") == 0)
-    {
-        target = VDP_MODE_2;
-        argv += 1;
-        argc -= 1;
-    }
-    else if (strcmp (argv [0], "--tms-small-sprites") == 0)
-    {
-        target = VDP_MODE_TMS_SMALL_SPRITES;
-        argv += 1;
-        argc -= 1;
-    }
-    else if (strcmp (argv [0], "--tms-large-sprites") == 0)
-    {
-        target = VDP_MODE_TMS_LARGE_SPRITES;
-        argv += 1;
-        argc -= 1;
-    }
-
-    if (strcmp (argv [0], "--de-duplicate") == 0)
-    {
-        de_duplicate = true;
-        argv += 1;
-        argc -= 1;
-    }
-
-    /* User-specified output directory */
-    if (strcmp (argv [0], "--output") == 0 && argc > 2)
-    {
-        output_dir = argv [1];
-        argv += 2;
-        argc -= 2;
-    }
-
-    /* User-initialized mode-4 palette */
-    if (strcmp (argv [0], "--palette") == 0)
-    {
-        while (++argv, --argc)
+        /* Common options */
+        if (strcmp (argv [0], "--de-duplicate") == 0)
         {
-            if (strncmp (argv [0], "0x", 2) == 0 && strlen (argv[0]) == 4)
+            de_duplicate = true;
+            argv += 1;
+            argc -= 1;
+        }
+        else if (strcmp (argv [0], "--output") == 0 && argc > 2)
+        {
+            output_dir = argv [1];
+            argv += 2;
+            argc -= 2;
+        }
+
+        /* TMS99xx Options */
+        if (strcmp (argv [0], "--mode-0") == 0)
+        {
+            target = VDP_MODE_0;
+            argv += 1;
+            argc -= 1;
+        }
+        else if (strcmp (argv [0], "--mode-2") == 0)
+        {
+            target = VDP_MODE_2;
+            argv += 1;
+            argc -= 1;
+        }
+        else if (strcmp (argv [0], "--tms-small-sprites") == 0)
+        {
+            target = VDP_MODE_TMS_SMALL_SPRITES;
+            argv += 1;
+            argc -= 1;
+        }
+        else if (strcmp (argv [0], "--tms-large-sprites") == 0)
+        {
+            target = VDP_MODE_TMS_LARGE_SPRITES;
+            argv += 1;
+            argc -= 1;
+        }
+
+        /* SMS-GG Mode4 Options */
+        else if (strcmp (argv [0], "--sprites") == 0)
+        {
+            target = VDP_MODE_4_SPRITES;
+            argv += 1;
+            argc -= 1;
+        }
+        else if (strcmp (argv [0], "--palette") == 0)
+        {
+            while (++argv, --argc)
             {
-                mode4_palette_add_colour (strtol (argv [0], NULL, 16));
+                if (strncmp (argv [0], "0x", 2) == 0 && strlen (argv[0]) == 4)
+                {
+                    mode4_palette_add_colour (strtol (argv [0], NULL, 16));
+                }
+                else
+                {
+                    break;
+                }
             }
-            else
-            {
-                break;
-            }
+        }
+
+        else
+        {
+            break;
         }
     }
 
@@ -328,6 +344,7 @@ int main (int argc, char **argv)
             rc = tms9928a_open_files ();
             break;
         case VDP_MODE_4:
+        case VDP_MODE_4_SPRITES:
             rc = mode4_open_files ();
             break;
         default:
@@ -358,6 +375,7 @@ int main (int argc, char **argv)
                 rc = tms9928a_close_files ();
                 break;
             case VDP_MODE_4:
+            case VDP_MODE_4_SPRITES:
                 rc = mode4_close_files ();
                 break;
             default:
