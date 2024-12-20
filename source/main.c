@@ -6,11 +6,15 @@
  * Sega Master System VDP, from a set of .png images.
  *
  * To Do list:
- *  - 'sprite mode' to not match on palette index 0
  *  - 'tall sprite mode' vertical tile ordering
- *  - Option for removing duplicate tiles
- *  - Option to generate tile maps for larger images
  *  - Option to help automate colour-cycling
+ *  - Possible architecture change:
+ *    -> Always de-duplicate
+ *    -> De-duplicate into a tile-buffer
+ *    -> Then, feed the de-duplicated tiles into the pattern generators.
+ *    -> For mode-0, consider sorting the tiles by colours first as a pre-processing step
+ *    -> Consider an external configuration file to describe panels within images.
+ *       -> If present could also contain the file names instead of as parameters.
  */
 
 #include <stdbool.h>
@@ -30,20 +34,28 @@
 target_t target = VDP_MODE_4;
 bool de_duplicate = false;
 char *output_dir = NULL;
+image_t current_image;
 
 /* De-duplication */
 void* unique_tiles [512];
 uint32_t unique_tiles_count = 0;
 
+/* Panes */
+uint32_t panel_width = 0;
+uint32_t panel_height = 0;
+uint32_t panel_count = 0;
+
 
 /*
  * Check if two 8x8 tiles are identical.
+ * Note: Currently the two tiles must be within the same image file.
  */
-static bool sneptile_check_match (pixel_t *tile_a, pixel_t *tile_b, uint32_t image_width)
+static bool sneptile_check_match (pixel_t *tile_a, pixel_t *tile_b)
 {
     for (uint32_t row = 0; row < 8; row++)
     {
-        if (memcmp (&tile_a [row * image_width], &tile_b [row * image_width], sizeof (pixel_t) * 8) != 0)
+        if (memcmp (&tile_a [row * current_image.width],
+                    &tile_b [row * current_image.width], sizeof (pixel_t) * 8) != 0)
         {
             return false;
         }
@@ -54,23 +66,23 @@ static bool sneptile_check_match (pixel_t *tile_a, pixel_t *tile_b, uint32_t ima
 
 
 /*
- * Check if an 8x8 tile is unique.
+ * Find the matching 8x8 tile, or -1 if it is unique.
  */
-static bool sneptile_check_unique (pixel_t *tile, uint32_t image_width)
+int32_t sneptile_get_match (pixel_t *tile)
 {
     for (uint32_t i = 0; i < unique_tiles_count; i++)
     {
-        if (sneptile_check_match (tile, unique_tiles [i], image_width))
-            return false;
+        if (sneptile_check_match (tile, unique_tiles [i]))
+            return i;
     }
-    return true;
+    return -1;
 }
 
 
 /*
  * Process an image made up of 8×8 tiles.
  */
-static int sneptile_process_image (pixel_t *buffer, uint32_t image_width, uint32_t image_height, char *name)
+static int sneptile_process_image (pixel_t *buffer, char *name)
 {
     uint32_t tile_width = 8;
     uint32_t tile_height = 8;
@@ -96,24 +108,27 @@ static int sneptile_process_image (pixel_t *buffer, uint32_t image_width, uint32
     }
 
     /* Sanity check */
-    if ((image_width % tile_width != 0) || (image_height % tile_height != 0))
+    if ((current_image.width % tile_width != 0) || (current_image.height % tile_height != 0))
     {
-        fprintf (stderr, "Error: Invalid resolution %ux%u\n", image_width, image_height);
+        fprintf (stderr, "Error: Invalid resolution %ux%u\n", current_image.width, current_image.height);
         return -1;
     }
 
+    /* Because we only store a pointer into the image buffer, we
+     * currently can't de-duplicate across files. This should be
+     * changed to store copies of the tiles. */
     unique_tiles_count = 0;
 
-    for (uint32_t row = 0; row < image_height; row += tile_height)
+    for (uint32_t row = 0; row < current_image.height; row += tile_height)
     {
-        for (uint32_t col = 0; col < image_width; col += tile_width)
+        for (uint32_t col = 0; col < current_image.width; col += tile_width)
         {
 
             if (de_duplicate && unique_tiles_count < 512)
             {
-                if (sneptile_check_unique (&buffer [row * image_width + col], image_width))
+                if (sneptile_get_match (&buffer [row * current_image.width + col]) == -1)
                 {
-                    unique_tiles [unique_tiles_count++] = &buffer [row * image_width + col];
+                    unique_tiles [unique_tiles_count++] = &buffer [row * current_image.width + col];
                 }
                 else
                 {
@@ -127,15 +142,27 @@ static int sneptile_process_image (pixel_t *buffer, uint32_t image_width, uint32
                 case VDP_MODE_2:
                 case VDP_MODE_TMS_SMALL_SPRITES:
                 case VDP_MODE_TMS_LARGE_SPRITES:
-                    tms9928a_process_tile (&buffer [row * image_width + col], image_width);
+                    tms9928a_process_tile (&buffer [row * current_image.width + col]);
                     break;
                 case VDP_MODE_4:
                 case VDP_MODE_4_SPRITES:
-                    mode4_process_tile (&buffer [row * image_width + col], image_width);
+                    mode4_process_tile (&buffer [row * current_image.width + col]);
                     break;
                 default:
                     break;
             }
+        }
+    }
+
+    if (panel_count)
+    {
+        switch (target)
+        {
+            case VDP_MODE_4:
+            case VDP_MODE_4_SPRITES:
+                mode4_process_panels (name, panel_count, panel_width, panel_height, buffer);
+            default:
+                break;
         }
     }
 
@@ -219,7 +246,9 @@ static int sneptile_process_file (char *name)
     /* Process the image */
     struct spng_ihdr header = { };
     spng_get_ihdr(spng_context, &header);
-    if (sneptile_process_image ((pixel_t *) image_buffer, header.width, header.height, name) != 0)
+    current_image.width = header.width;
+    current_image.height = header.height;
+    if (sneptile_process_image ((pixel_t *) image_buffer, name) != 0)
     {
         fprintf (stderr, "Error: Failed to process image %s.\n", name);
         return RC_ERROR;
@@ -246,12 +275,13 @@ int main (int argc, char **argv)
         fprintf (stderr, "Usage: %s [options] <tiles.png>\n", argv [0]);
         fprintf (stderr, "    --mode-0 : Generate TMS99xx mode-0 patterns\n");
         fprintf (stderr, "    --mode-2 : Generate TMS99xx mode-2 patterns\n");
+        fprintf (stderr, "    --sprites : Mode-4 sprites. Index 0 will not be used for visible colours.\n");
         fprintf (stderr, "    --tms-small-sprites : Generate TMS99xx sprite patterns (8x8)\n");
         fprintf (stderr, "    --tms-large-sprites : Generate TMS99xx sprite patterns (16x16)\n");
         fprintf (stderr, "    --de-duplicate : Within an input file, don't generate the same pattern twice\n");
-        fprintf (stderr, "    --sprites : Mode-4 sprites. Index 0 will not be used for visible colours.\n");
         fprintf (stderr, "    --output <dir> : Specify output directory\n");
-        fprintf (stderr, "    --palette <0x00 0x01..> : Pre-defined palette entries\n");
+        fprintf (stderr, "    --palette <0x00 0x01..> : Pre-defined palette entries.\n");
+        fprintf (stderr, "    --panels wxh,n : The following sheet contains <n> panels of size <w> x <h>. Depends on de-duplication.\n");
         return EXIT_FAILURE;
     }
     argv++;
@@ -275,7 +305,7 @@ int main (int argc, char **argv)
         }
 
         /* TMS99xx Options */
-        if (strcmp (argv [0], "--mode-0") == 0)
+        else if (strcmp (argv [0], "--mode-0") == 0)
         {
             target = VDP_MODE_0;
             argv += 1;
@@ -355,10 +385,24 @@ int main (int argc, char **argv)
     {
         for (uint32_t i = 0; i < argc; i++)
         {
-            rc = sneptile_process_file (argv [i]);
-            if (rc != RC_OK)
+            if (strcmp (argv[i], "--panels") == 0)
             {
-                break;
+                unsigned int width, height, count;
+                sscanf (argv [++i], "%ux%u,%u", &width, &height, &count);
+                panel_width = width;
+                panel_height = height;
+                panel_count = count;
+            }
+            else
+            {
+                rc = sneptile_process_file (argv [i]);
+                if (rc != RC_OK)
+                {
+                    break;
+                }
+
+                /* Panel setting is only valid per-image */
+                panel_count = 0;
             }
         }
     }
