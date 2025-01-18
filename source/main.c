@@ -291,7 +291,6 @@ int main (int argc, char **argv)
         fprintf (stderr, "    --background-palette <0x00 0x01..> : Pre-defined palette entries for the background palette.\n");
         fprintf (stderr, "    --sprites : Don't use index 0 for visible colours.\n");
         fprintf (stderr, "  Per-sheet options:\n");
-        fprintf (stderr, "    --reserve <name,n> : Reserve <n> patterns before the next sheet (eg, for runtime generated patterns)\n");
         fprintf (stderr, "    --background : The next sheet should use the background palette instead of the sprite palette (mode-4)\n");
         fprintf (stderr, "    --panels <wxh,n> : The following sheet contains <n> panels of size <w> x <h>. Depends on de-duplication.\n");
         return EXIT_FAILURE;
@@ -411,24 +410,7 @@ int main (int argc, char **argv)
     {
         for (uint32_t i = 0; i < argc; i++)
         {
-            if (strcmp (argv [i], "--reserve") == 0)
-            {
-                char name [80] = { '\0' };
-                unsigned int count;
-                sscanf (argv [++i], "%79[^,],%u", name, &count);
-
-                /* For now, only implemented for mode-4 */
-                switch (target)
-                {
-                    case VDP_MODE_4:
-                    case VDP_MODE_4_SPRITES:
-                        mode4_reserve_patterns (name, count);
-                        break;
-                    default:
-                        break;
-                }
-            }
-            else if (strcmp (argv [i], "--background") == 0)
+            if (strcmp (argv [i], "--background") == 0)
             {
                 use_background_palette = true;
             }
