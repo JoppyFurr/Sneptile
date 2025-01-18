@@ -285,7 +285,7 @@ int main (int argc, char **argv)
         fprintf (stderr, "    --tms-small-sprites : Generate TMS99xx sprite patterns (8x8)\n");
         fprintf (stderr, "    --tms-large-sprites : Generate TMS99xx sprite patterns (16x16)\n");
         fprintf (stderr, "    --de-duplicate : Within an input file, don't generate the same pattern twice\n");
-        fprintf (stderr, "    --output <dir> : Specify output directory\n");
+        fprintf (stderr, "    --output-dir <dir> : Specify output directory\n");
         fprintf (stderr, "  Mode-4 options:\n");
         fprintf (stderr, "    --sprite-palette <0x00 0x01..> : Pre-defined palette entries for the sprite palette.\n");
         fprintf (stderr, "    --background-palette <0x00 0x01..> : Pre-defined palette entries for the background palette.\n");
@@ -309,7 +309,7 @@ int main (int argc, char **argv)
             argv += 1;
             argc -= 1;
         }
-        else if (strcmp (argv [0], "--output") == 0 && argc > 2)
+        else if (strcmp (argv [0], "--output-dir") == 0 && argc > 2)
         {
             output_dir = argv [1];
             argv += 2;

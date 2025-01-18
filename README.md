@@ -5,7 +5,7 @@ Sneptile is a tool for converting images into tile data for the Sega Master Syst
 Input images should have a width and height that are multiples of 8px.
 Tiles are generated left-to-right, top-to-bottom, first file to last file.
 
-Usage: `./Sneptile [--mode-0] --output tile_data --palette 0x04 0x19 [--reserve name,count] empty.png cursor.png`
+Usage: `./Sneptile [--mode-0] --output-dir tile_data --palette 0x04 0x19 [--reserve name,count] empty.png cursor.png`
 
  * `--mode-0`: Generate Mode-0 tiles.
  * `--mode-2`: Generate Mode-2 tiles.
@@ -13,7 +13,7 @@ Usage: `./Sneptile [--mode-0] --output tile_data --palette 0x04 0x19 [--reserve 
  * `--tms-large-sprites`: Generate 16x16 sprites for the TMS modes.
  * `--sprites`: Mode-4 sprites. Index 0 will not be used for visible colours.
  * `--de-duplicate`: Within an input file, don't generate the same pattern twice.
- * `--output <dir>`: specifies the directory for the generated files
+ * `--output-dir <dir>`: specifies the directory for the generated files
  * `--sprite-palette <0x...>`: specifies the first n entries of the mode-4 sprite palette
  * `--background-palette <0x...>`: specifies the first n entries of the mode-4 background palette
  * `--reserve <name,n>`: Reserve <n> patterns before the next sheet (eg, for runtime generated patterns).
