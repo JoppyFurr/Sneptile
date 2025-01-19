@@ -16,7 +16,10 @@
  *    -> Consider an external configuration file to describe panels within images.
  *       -> If present could also contain the file names instead of as parameters.
  *  - Configuration file instead of ever-growing parameters?
- *  - De-tangle "--sprites", making it per-sheet. Background patterns should be able to use index 0.
+ *  - De-tangle "--sprites", making it per-sheet. Background patterns should be able to use index 0 for an
+ *    extra colour that sprites don't use.
+ *  - Split patterns across multiple output files to work with mappers.
+ *  - Always de-duplicate, consider <name>_indices instead of <name>_panels for non-panel input files.
  */
 
 #include <stdbool.h>

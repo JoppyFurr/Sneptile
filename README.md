@@ -24,12 +24,11 @@ The following three files are generated in the specified output directory:
 
 patterns.h contains the pattern data to load into the VDP:
 ```
-const uint32_t patterns [] = {
-
-    /* empty.png */
+const uint32_t blank_patterns [] = {
     0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
+};
 
-    /* cursor.png */
+const uint32_t cursor_patterns [] = {
     0x0000c000, 0x0000e040, 0x0000f060, 0x0000f870, 0x0000fc78, 0x0000fe7c, 0x0000ff7e, 0x0000ff7f,
     0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00008000,
     0x0000ff7f, 0x0000ff7c, 0x0000fe6c, 0x0000ef46, 0x0000cf06, 0x00008703, 0x00000703, 0x00000300,
@@ -45,10 +44,9 @@ const uint32_t patterns [] = {
 };
 ```
 
-pattern_index.h contains the index of the first tile from each image file:
+pattern_index.h will contain panel data for indexes into the pattern arrays.
 ```
-#define PATTERN_EMPTY 0
-#define PATTERN_CURSOR 1
+    See 'Panels' section below.
 ```
 
 palette.h contains the palette:
@@ -81,8 +79,6 @@ The first file containing a single tile, the second containing 31 playing card p
 ```
 will generate the following pattern_index.h:
 ```
-#define PATTERN_EMPTY 0
-#define PATTERN_CARDS 1
 uint16_t panel_cards [31] [24] = {
     { 0x0829, 0x082a, 0x082b, 0x082c, 0x0835, 0x0836, 0x0837, 0x0838, 0x0835, 0x0856, 0x0856, 0x0838,
       0x086b, 0x086c, 0x086d, 0x086e, 0x088c, 0x088d, 0x088d, 0x088e, 0x0898, 0x0899, 0x0899, 0x089a },
@@ -101,6 +97,10 @@ Bit 11 indicates that the sprite palette is being used (default).
 Note that, for now: --panels will only work when using mode-4 and de-duplication.
 
 ## TMS99xx Mode-0 and Mode-2
+
+Note: TMS99xx modes are not fully up-to-date with SMS mode behaviours.
+ * A single large pattern array is generated instead of one pattern array per input file.
+ * De-duplication has not been enabled
 
 Initial support is also available for Mode-0 and Mode-2 of the TMS9918 family.
 
