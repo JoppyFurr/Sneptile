@@ -5,6 +5,8 @@ Sneptile is a tool for converting images into tile data for the Sega Master Syst
 Input images should have a width and height that are multiples of 8px.
 Tiles are generated left-to-right, top-to-bottom, first file to last file.
 
+Within a file, tiles are de-duplicated (mode-4 only for now).
+
 Usage: `./Sneptile [--mode-0] --output-dir tile_data --palette 0x04 0x19 empty.png cursor.png`
 
  * `--mode-0`: Generate Mode-0 tiles.
@@ -12,12 +14,11 @@ Usage: `./Sneptile [--mode-0] --output-dir tile_data --palette 0x04 0x19 empty.p
  * `--tms-small-sprites`: Generate 8x8 sprites for the TMS modes.
  * `--tms-large-sprites`: Generate 16x16 sprites for the TMS modes.
  * `--sprites`: Mode-4 sprites. Index 0 will not be used for visible colours.
- * `--de-duplicate`: Within an input file, don't generate the same pattern twice.
  * `--output-dir <dir>`: specifies the directory for the generated files
  * `--sprite-palette <0x...>`: specifies the first n entries of the mode-4 sprite palette
  * `--background-palette <0x...>`: specifies the first n entries of the mode-4 background palette
  * `--background`: The next sheet should use the background palette instead of the default sprite palette (mode-4)
- * `--panels <wxh,n>`: Per-image, describes <n> panels of size <w> x <h> tiles. Mode-4 only, and depends on de-duplication.
+ * `--panels <wxh,n>`: Per-image, describes <n> panels of size <w> x <h> tiles. Mode-4 only.
  * `... <.png>`: the remaining parameters are `.png` images to generate tiles from
 
 The following three files are generated in the specified output directory:
@@ -71,7 +72,7 @@ be generated in pattern_index.h.
 An example showing two files.
 The first file containing a single tile, the second containing 31 playing card panels:
 ```
-./Sneptile --de-duplicate --sprites --sprite-palette 0x00 \
+./Sneptile --sprites --sprite-palette 0x00 \
     tiles/empty.png \
     --panels 4x6,31 \
     tiles/cards.png
@@ -94,7 +95,7 @@ uint16_t panel_cards [31] [24] = {
 
 Bit 11 indicates that the sprite palette is being used (default).
 
-Note that, for now: --panels will only work when using mode-4 and de-duplication.
+Note that, for now: --panels will only work when using mode-4.
 
 ## TMS99xx Mode-0 and Mode-2
 

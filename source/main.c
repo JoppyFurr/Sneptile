@@ -6,10 +6,10 @@
  * Sega Master System VDP, from a set of .png images.
  *
  * To Do list:
+ *  - De-duplicate for tms99xx modes
  *  - 'tall sprite mode' vertical tile ordering
  *  - Option to help automate colour-cycling
  *  - Possible architecture change:
- *    -> Always de-duplicate
  *    -> De-duplicate into a tile-buffer
  *    -> Then, feed the de-duplicated tiles into the pattern generators.
  *    -> For mode-0, consider sorting the tiles by colours first as a pre-processing step
@@ -37,7 +37,6 @@
 
 /* Global State */
 target_t target = VDP_MODE_4;
-bool de_duplicate = false;
 char *output_dir = NULL;
 image_t current_image;
 
@@ -122,9 +121,8 @@ static int sneptile_process_image (pixel_t *buffer, char *name)
         return -1;
     }
 
-    /* Because we only store a pointer into the image buffer, we
-     * currently can't de-duplicate across files. This should be
-     * changed to store copies of the tiles. */
+    /* Reset the unique tiles counter.
+     * Note that de-duplication is only performed within a file, not across files. */
     unique_tiles_count = 0;
 
     for (uint32_t row = 0; row < current_image.height; row += tile_height)
@@ -132,7 +130,7 @@ static int sneptile_process_image (pixel_t *buffer, char *name)
         for (uint32_t col = 0; col < current_image.width; col += tile_width)
         {
 
-            if (de_duplicate && unique_tiles_count < 512)
+            if ((target == VDP_MODE_4 || target == VDP_MODE_4_SPRITES) && unique_tiles_count < 512)
             {
                 if (sneptile_get_match (&buffer [row * current_image.width + col]) == -1)
                 {
@@ -305,13 +303,7 @@ int main (int argc, char **argv)
     while (argc > 0)
     {
         /* Common options */
-        if (strcmp (argv [0], "--de-duplicate") == 0)
-        {
-            de_duplicate = true;
-            argv += 1;
-            argc -= 1;
-        }
-        else if (strcmp (argv [0], "--output-dir") == 0 && argc > 2)
+        if (strcmp (argv [0], "--output-dir") == 0 && argc > 2)
         {
             output_dir = argv [1];
             argv += 2;
