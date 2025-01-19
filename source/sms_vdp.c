@@ -124,10 +124,43 @@ void mode4_new_input_file (const char *name)
 
 
 /*
- * Generate panel indexes for the file.
- * Bit 11 in the index indicates use of the sprite palette.
+ * Generate indices for the file.
  */
-void mode4_process_panels (const char *name, palette_t palette, uint32_t panel_count, uint32_t panel_width, uint32_t panel_height, pixel_t *buffer)
+void mode4_process_indices (const char *name, pixel_t *buffer)
+{
+    /* Strip the extension for the array name */
+    char *base_name = strdup (name);
+    char *extension = strchr (base_name, '.');
+    if (extension)
+    {
+        extension [0] = '\0';
+    }
+
+    fprintf (pattern_index_file, "\nconst uint16_t %s_indices [%d] = {\n   ", base_name, (current_image.width / 8) * (current_image.height / 8));
+    free (base_name);
+
+    uint32_t tile_count = 0;
+    for (uint32_t row = 0; row < current_image.height; row += 8)
+    for (uint32_t col = 0; col < current_image.width; col += 8)
+    {
+        fprintf (pattern_index_file, " 0x%04x", sneptile_get_match (&buffer [row * current_image.width + col]));
+
+        fprintf (pattern_index_file, "%s", (tile_count == 11) ? ",\n   " : ",");
+        tile_count = (tile_count + 1) % 12;
+    }
+    if (tile_count != 0)
+    {
+        fprintf (pattern_index_file, "\n");
+    }
+
+    fprintf (pattern_index_file, "};\n");
+}
+
+
+/*
+ * Generate panel indices for the file.
+ */
+void mode4_process_panels (const char *name, uint32_t panel_count, uint32_t panel_width, uint32_t panel_height, pixel_t *buffer)
 {
     /* Strip the extension for the array name */
     char *base_name = strdup (name);

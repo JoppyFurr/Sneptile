@@ -7,19 +7,17 @@
  *
  * To Do list:
  *  - De-duplicate for tms99xx modes
- *  - 'tall sprite mode' vertical tile ordering
- *  - Option to help automate colour-cycling
- *  - Possible architecture change:
- *    -> De-duplicate into a tile-buffer
- *    -> Then, feed the de-duplicated tiles into the pattern generators.
- *    -> For mode-0, consider sorting the tiles by colours first as a pre-processing step
- *    -> Consider an external configuration file to describe panels within images.
- *       -> If present could also contain the file names instead of as parameters.
- *  - Configuration file instead of ever-growing parameters?
- *  - De-tangle "--sprites", making it per-sheet. Background patterns should be able to use index 0 for an
- *    extra colour that sprites don't use.
  *  - Split patterns across multiple output files to work with mappers.
- *  - Always de-duplicate, consider <name>_indices instead of <name>_panels for non-panel input files.
+ *  - Make "--sprites" per-sheet. Background patterns should be able to use the extra index-0 colour.
+ *
+ * Consider:
+ *  - Option to help automate colour-cycling
+ *  - 'tall sprite mode' vertical tile ordering
+ *  - De-duplicate after converting to VDP representation instead of in image-space
+ *  - For mode-0, consider pre-processing the tiles into colour-groups before de-duplication / VDP representation
+ *  - Configuration files to describe what to do with each image rather than parameters
+ *  - Dithering support for handling full-colour images
+ *  - Lossy de-duplication to force an image to use at most <n> patterns
  */
 
 #include <stdbool.h>
@@ -167,7 +165,18 @@ static int sneptile_process_image (pixel_t *buffer, char *name)
         {
             case VDP_MODE_4:
             case VDP_MODE_4_SPRITES:
-                mode4_process_panels (name, (use_background_palette) ? PALETTE_BACKGROUND : PALETTE_SPRITE, panel_count, panel_width, panel_height, buffer);
+                mode4_process_panels (name, panel_count, panel_width, panel_height, buffer);
+            default:
+                break;
+        }
+    }
+    else
+    {
+        switch (target)
+        {
+            case VDP_MODE_4:
+            case VDP_MODE_4_SPRITES:
+                mode4_process_indices (name, buffer);
             default:
                 break;
         }

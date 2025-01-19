@@ -45,9 +45,16 @@ const uint32_t cursor_patterns [] = {
 };
 ```
 
-pattern_index.h will contain panel data for indexes into the pattern arrays.
+pattern_index.h will contain an indices array for each file, giving the pattern index for each
+8x8 tile on the input file.
 ```
-    See 'Panels' section below.
+const uint16_t image_indices [56] = {
+    0x0000, 0x0001, 0x0001, 0x0002, 0x0003, 0x0004, 0x0005, 0x0006, 0x0003, 0x0007, 0x0005, 0x0006,
+    0x0008, 0x0009, 0x0009, 0x000a, 0x000b, 0x000c, 0x000d, 0x000e, 0x000b, 0x000f, 0x000d, 0x000e,
+    0x0010, 0x0011, 0x0011, 0x0012, 0x0013, 0x0014, 0x0015, 0x0016, 0x0017, 0x0018, 0x0019, 0x0016,
+    0x001a, 0x001b, 0x001b, 0x001c, 0x001d, 0x001e, 0x001e, 0x001f, 0x0020, 0x0021, 0x0022, 0x0023,
+    0x0020, 0x0024, 0x0022, 0x0023, 0x0025, 0x0026, 0x0026, 0x0027,
+};
 ```
 
 palette.h contains the palette:
@@ -66,8 +73,9 @@ re-use on the Game Gear.
 To select the correct palette, you will need to define one of `TARGET_SMS` or `TARGET_GG`.
 
 ## Panels
-Per-file, a panel size and count can be described. When used an array of indexes will
-be generated in pattern_index.h.
+Per-file, if the file contains multiple panels (such as playing cards), a panel size and count can be described.
+When the `--panels` option is used, used an array of indexes will be generated in `pattern_index.h` for each panel,
+instead of a single indices array for the whole image.
 
 An example showing two files.
 The first file containing a single tile, the second containing 31 playing card panels:
